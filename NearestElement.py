@@ -1,5 +1,7 @@
+import pandas
 import json
 from math import radians, cos, sin, asin, sqrt, pi, degrees
+from googlemaps_api import *
 class data_generator(object):
     """Load, integrate and digest data from a given path:
 
@@ -93,7 +95,7 @@ class data_generator(object):
     
     
 #     def find_nearest(self, px, py, x_lng_reduced = self.x_lng, y_lat_reduced = self.y_lat, key_list = self.key_list, top = 3):
-    def find_nearest(self, px, py, x_lng_reduced, y_lat_reduced, key_list, top = 3, metric = 'km'):
+    def find_nearest(self, px, py, x_lng_reduced, y_lat_reduced, key_list, top = 3, metric = 'km', d_method = 'hev'):
         
         """
         find the nearest best element given a position. 
@@ -112,18 +114,26 @@ class data_generator(object):
         for i in range(len(x_lng_reduced)):
             lng1 = x_lng_reduced[i]
             lat1 = y_lat_reduced[i]
-            d = self.haversine(lng1, lat1, px, py, metric)
+            if d_method == 'hev':
+                d = self.haversine(lng1, lat1, px, py, metric)
+            elif d_method == 'walking':
+                d = get_distance_time([lat1, lng1],[py, px],'walking')[0]
+            elif d_method == 'driving':
+                d = get_distance_time([lat1, lng1],[py, px],'driving')[0]
+            else:
+                d = self.haversine(lng1, lat1, px, py, metric)
             if d < min_dist[top-1]:
                 min_dist[top-1] =  d
                 min_dist_idx[top-1] = key_list[i]
                 min_dist, min_dist_idx = (list(t) for t in zip(*sorted(zip(min_dist, min_dist_idx))))
-        for idx, i in enumerate(min_dist_idx):
-            if self.data_hashed[i]['OutOfService'] is False and self.data_hashed[i]['Critical'] is False:
-                return min_dist[idx], min_dist_idx[idx]
-        print('No element is in service on top', top, 'nearest spot')
-        return False
-    
-    def get_nearest_fast_allinOne(self, px, py, epsilon = 0.5, top = 3, metric = 'km'):
+#        for idx, i in enumerate(min_dist_idx):
+#            if self.data_hashed[i]['OutOfService'] is False and self.data_hashed[i]['Critical'] is False:
+#                return min_dist[idx], min_dist_idx[idx]
+#        print('No element is in service on top', top, 'nearest spot')
+#        return False
+        return min_dist, min_dist_idx
+
+    def get_nearest_fast_allinOne(self, px, py, epsilon = 1, top = 3, metric = 'km', d_method = 'walking'):
         """
         find the nearest best element given a position. 
         First find out top 3 (by default) nearest element, 
@@ -132,7 +142,19 @@ class data_generator(object):
         (need to get clarified later)
         """
         _, _, _, _, x_lng_reduced, y_lat_reduced, key_list = self.reduce_search_space(epsilon, px, py, metric)
-        d, key = self.find_nearest(px, py, x_lng_reduced, y_lat_reduced, key_list, top, metric)
-        for i in self.data_hashed[key]:
-            print(i, '--', self.data_hashed[key][i])
-        print('distance:', d)
+#        d, key = self.find_nearest(px, py, x_lng_reduced, y_lat_reduced, key_list, top, metric)
+#        for i in self.data_hashed[key]:
+#            print(i, '--', self.data_hashed[key][i])
+#        print('distance:', d)
+        min_dist, min_dist_idx = self.find_nearest(px, py, x_lng_reduced, y_lat_reduced, key_list, top, metric, d_method)
+        output_med = {}
+        for idx, i in enumerate(min_dist_idx):
+            if i != -1:
+                if self.data_hashed[i]['OutOfService'] is False:
+                    output_med[idx] = self.data_hashed[i]
+                
+        output_pd = pandas.DataFrame.from_dict(output_med, orient='index')
+        output_pd.rename(columns={'lat':'Lat','lng':'Lon'}, inplace = True)
+        if len(output_pd) == 0:
+            output_pd = pandas.DataFrame(columns=('Lat', 'Lon', 'OutOfService', 'Critical', 'CriticalNotes'))
+        return output_pd
