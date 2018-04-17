@@ -10,8 +10,13 @@ from flask_cors import CORS
 import pandas as pd
 import numpy as np
 import os
+## new ##
+from googlemaps_api import *
+from NearestElement import *
+app = dash.Dash()
+## new ##
 
-app = dash.Dash('UberApp')
+
 server = app.server
 
 
@@ -49,59 +54,30 @@ app.layout = html.Div([
     ], className="graphSlider ten columns offset-by-one"),
 ], style={"padding-top": "20px"})
 
-def getIndex(value):
-    if(value==None):
-        return 0
-    val = {
-        'Apr': 0,
-        'May': 1,
-        'June': 2,
-        'July': 3,
-        'Aug': 4,
-        'Sept': 5
-    }[value]
-    return val
-
-def getClickIndex(value):
-    if(value==None):
-        return 0
-    return value['points'][0]['x']
-
-def get_selection(value, slider_value, selection):
-    xVal = []
-    yVal = []
-    xSelected = []
-
-    colorVal = ["#F4EC15", "#DAF017", "#BBEC19", "#9DE81B", "#80E41D", "#66E01F",
-                "#4CDC20", "#34D822", "#24D249", "#25D042", "#26CC58", "#28C86D",
-                "#29C481", "#2AC093", "#2BBCA4", "#2BB5B8", "#2C99B4", "#2D7EB0",
-                "#2D65AC", "#2E4EA4", "#2E38A4", "#3B2FA0", "#4E2F9C", "#603099"]
-
-    if(selection is not None):
-        for x in selection:
-            xSelected.append(int(x))
-    for i in range(0, 24, 1):
-        if i in xSelected and len(xSelected) < 24:
-            colorVal[i] = ('#FFFFFF')
-        xVal.append(i)
-        yVal.append(len(totalList[getIndex(value)][slider_value-1]
-                    [totalList[getIndex(value)][slider_value-1].index.hour == i]))
-
-    return [np.array(xVal), np.array(yVal), np.array(xSelected),
-            np.array(colorVal)]
-
-
 @app.callback(Output("map-graph", "figure"),
               [Input('my-slider', 'value')],
               [State('map-graph', 'relayoutData')])
 def update_graph(slider_value, prevLayout):
+    ## new ##
     zoom = 12.0
-    latInitial = 39.9
-    lonInitial = -75.1
+#    latInitial = 39.9
+#    lonInitial = -75.1
+    latInitial = 39.8682140
+    lonInitial = -75.0434433
     bearing = 0
     mapControls = 'lock'
-    listStr = 'totalList'
-
+#    [latInitial, lonInitial] = get_Geocode('200 N White Horse Pike, Lawnside, NJ 08045, USA')
+    output_pd = hydrants.get_nearest_fast_allinOne(lonInitial, latInitial, epsilon = 1, top = 3, metric = 'km', d_method = 'walking')
+    output_pd.drop("OutOfService", 1, inplace=True)
+    output_pd.drop("Critical", 1, inplace=True)
+    output_pd.drop("CriticalNotes", 1, inplace=True)
+    address = get_address([output_pd.iloc[0]['Lat'], output_pd.iloc[0]['Lon']])
+    print(address)
+    listStr = 'output_pd'
+    ## new ##
+#    latInitial = 39.8680
+#    lonInitial = -75.0427
+#    listStr = 'totalList'
     if(prevLayout is not None and mapControls is not None and
        'lock' in mapControls):
         zoom = float(prevLayout['mapbox']['zoom'])
@@ -185,7 +161,10 @@ for css in external_css:
 def defineTotalList():
     global totalList
     totalList = initialize()
-
+    ## new ##
+    global hydrants
+    hydrants = data_generator('/Users/Joe/Desktop/phillyCODEFEST/hydrants.json')
+    ## new ##
 
 if __name__ == '__main__':
     app.run_server(debug=True)
